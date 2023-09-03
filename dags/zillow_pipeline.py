@@ -6,6 +6,7 @@ import json
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.operators.bash import BashOperator
 
 
 
@@ -25,6 +26,7 @@ def extract_data_func(**kwargs):
     with open(output_json, "w") as f:
         json.dump(data, f, indent=4)
     output_list = [output_json, file_str]
+    # push to Xcom
     return output_list   
 
 
@@ -64,7 +66,16 @@ dag = DAG(
 
 with dag:
     extract_data_task = PythonOperator(
-        task_id="extract_data",
+        task_id="extract_data_api",
         python_callable=extract_data_func,
         op_kwargs=aux
     )
+
+    # another way to load files to S3
+    load_s3_task = BashOperator(
+        task_id="load_data_s3",
+        # pip install --upgrade awscli
+        bash_command="aws s3 mv {{ ti.xcom_pull('extract_data_api')[0]}} s3://zillow-datasets/"
+    )
+
+    extract_data_task >> load_s3_task
