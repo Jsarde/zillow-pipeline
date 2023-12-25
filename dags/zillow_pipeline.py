@@ -10,31 +10,34 @@ from airflow.operators.bash import BashOperator
 
 
 
-def extract_data_func(**kwargs):
+def extract_data_func(**kwargs) -> str:
     # not very useful to use kwargs in this case, just to try out
     url = kwargs["url"]
     querystring = kwargs["querystring"]
     headers = kwargs["headers"]
     dt = kwargs["dt"]
-    response = requests.get(url=url, params=querystring, headers=headers)
-    data = response.json()
+    
+    try:
+        response = requests.get(url=url, params=querystring, headers=headers)
+    except Exception as e:
+        print(f"Request error >>: {str(e)}")
+    else:
+        data = response.json()
 
-    file_name = f"zillow_data_{dt}"
-    output_json = f"/home/ubuntu/{file_name}.json"
-    file_str = file_name + ".csv"
+        file_name = f"zillow_data_{dt}"
+        output_json = f"/home/ubuntu/{file_name}.json"
+        file_str = file_name + ".csv"
 
-    with open(output_json, "w") as f:
-        json.dump(data, f, indent=4)
-    output_list = [output_json, file_str]
-    # push to Xcom
-    return output_list   
+        with open(output_json, "w") as f:
+            json.dump(data, f, indent=4)
+        output_list = [output_json, file_str]
+        # push to Xcom
+        return output_list   
 
-
-def get_headers():
+def get_headers() -> dict:
     load_dotenv()
     rapidapi_key = os.getenv("RAPIDAPI_KEY")
     rapidapi_host = os.getenv("RAPIDAPI_HOST")
-
     headers = {
         "X-RapidAPI-Key": rapidapi_key,
         "X-RapidAPI-Host": rapidapi_host
@@ -52,7 +55,10 @@ args = {
     "owner":"Sja",
     "retries":2,
     "retry_delay":timedelta(minutes=30),
-    "depend_on_past":False
+    "depend_on_past":False,
+    "email":["jacoposardellini@gmail.com"],
+    "email_on_failure":False,
+    "email_on_retry":False
 }
 
 dag = DAG(
@@ -70,7 +76,6 @@ with dag:
         python_callable=extract_data_func,
         op_kwargs=aux
     )
-
     # another way to load files to S3
     load_s3_task = BashOperator(
         task_id="load_data_s3",
